@@ -1,21 +1,34 @@
-CC=gcc
-CFLAGS=-c -Wall -g
-LDFLAGS=-ljpeg
-SOURCES= mandel.c jpegrw.c 
-OBJECTS=$(SOURCES:.c=.o)
-EXECUTABLE=mandel
 
-all: $(SOURCES) $(EXECUTABLE) 
+CC = gcc
+CFLAGS = -Wall -g -MMD -MP 
+LDFLAGS = -ljpeg -lm
 
-# pull in dependency info for *existing* .o files
+EXECUTABLES = mandel mandelmovie
+OBJECTS = mandel.o mandel_core.o mandelmovie.o jpegrw.o
+
+all: $(EXECUTABLES)
+
+# Include dependency information
 -include $(OBJECTS:.o=.d)
 
-$(EXECUTABLE): $(OBJECTS)
-	$(CC) $(OBJECTS) $(LDFLAGS) -o $@
+# Original Mandelbrot program
+mandel: mandel.o jpegrw.o
+	$(CC) $^ $(LDFLAGS) -o $@
 
-.c.o: 
-	$(CC) $(CFLAGS) $< -o $@
-	$(CC) -MM $< > $*.d
+# Mandelbrot movie program
+mandelmovie: mandelmovie.o mandel_core.o jpegrw.o
+	$(CC) $^ $(LDFLAGS) -o $@
 
+# Compile Mandelbrot functions without main()
+mandel_core.o: mandel.c
+	$(CC) $(CFLAGS) -DMANDEL_LIBRARY -c $< -o $@
+
+# Compile remaining source files
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Clean generated files
 clean:
-	rm -rf $(OBJECTS) $(EXECUTABLE) *.d
+	rm -f $(OBJECTS) $(EXECUTABLES) *.d
+
+.PHONY: all clean
