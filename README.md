@@ -2,8 +2,7 @@
 
 **Assignments:** Lab 11 - Multiprocessing; Lab 12 - Multithreading  
 **Course:** CPE-2600 Systems Programming, Fall 2026  
-**Student:** [Your full name]  
-**Section:** [Your section number]
+**Student:** Nick G
 
 ## Project overview
 
