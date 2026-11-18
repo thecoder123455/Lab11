@@ -181,7 +181,7 @@ Threads:   1, 2, 5, 10, 20, 50
 
 This produces **36 configurations**. Record the elapsed execution time for each configuration in a table or CSV file. A heatmap can highlight the fastest configuration, while a line chart can show execution time versus thread count with one line per process count.
 
-**Interpretation:** Lower elapsed time is better. Increasing process or thread counts may improve performance up to a point, but excessive concurrency can introduce scheduling, memory, and disk-I/O overhead. The elapsed time also includes JPEG generation and file writing, not just Mandelbrot calculations. For more reliable comparisons, run each configuration multiple times and report the average or median.
+**Interpretation:** Lower elapsed time is better. Increasing process or thread counts may improve performance up to a point, but excessive concurrency can introduce scheduling, memory, and disk-I/O overhead. The elapsed time also includes JPEG generation and file writing, not jgust Mandelbrot calculations. For more reliable comparisons, run each configuration multiple times and report the average or median.
 
 ### Adding Benchmark Graphs to This README
 
