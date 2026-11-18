@@ -164,6 +164,29 @@ You can also preview the image sequence directly without first exporting an MP4:
 ffplay -framerate 10 -i mandel_%04d.jpg
 ```
 
+
+### Benchmark Data
+
+[Download Excel Benchmark Results](BenchmarkResults.xlsx)
+
+
+
+
+## Performance Analysis
+
+### Execution Time Heatmap
+
+![Heatmap](Screenshot%202026-11-17%20212816.png)
+
+### Processes vs. Execution Time
+
+![Runtime Graph](Screenshot%202026-11-17%20211230.png)
+
+### Full Benchmark Data
+
+[Download Excel Workbook](BenchmarkResults.xlsx)
+
+
 ## Performance Benchmarking
 
 The program accepts different process and thread counts, making it possible to compare execution times. For example:
