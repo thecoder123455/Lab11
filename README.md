@@ -183,25 +183,3 @@ This produces **36 configurations**. Record the elapsed execution time for each 
 
 **Interpretation:** Lower elapsed time is better. Increasing process or thread counts may improve performance up to a point, but excessive concurrency can introduce scheduling, memory, and disk-I/O overhead. The elapsed time also includes JPEG generation and file writing, not jgust Mandelbrot calculations. For more reliable comparisons, run each configuration multiple times and report the average or median.
 
-### Adding Benchmark Graphs to This README
-
-Export your Excel heatmap and graph as PNG images, store them in an `images/` folder in your repository, and then add the following Markdown where you want the images to appear:
-
-```markdown
-IMAGES GO HERE:
-
-
-## Notes
-
-- The generator writes frames to the current working directory. Running it again with the same frame indices overwrites those files.
-- The thread count and process count must both be greater than zero; the movie generator checks these values.
-- More processes means more simultaneously active image-generating children, not more total frames. The total number of frames is controlled by `-i`.
-- This project targets a Unix-like environment; the `fork()`-based movie generator is not directly portable to native Windows without an appropriate compatibility environment.
-
-## Code References
-
-The source files include acknowledgments of example code used as a starting point:
-
-- Mandelbrot implementation: [FIU COP4610 project example](https://users.cs.fiu.edu/~cpoellab/teaching/cop4610_fall22/project3.html)
-- JPEG utility implementation: [libjpeg example by tspi.at](https://www.tspi.at/2020/03/20/libjpegexample.html)
->>>>>>> 79981a1 (Refactor code structure for improved readability and maintainability)
