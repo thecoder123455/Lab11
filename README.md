@@ -1,208 +1,223 @@
-<<<<<<< HEAD
-Builds a movie of the Mandelbrot set
-=======
-# Mandelbrot Image and Zoom Movie Generator
+# CPE-2600: Mandelbrot Multiprocessing and Multithreading
 
-This project generates images of the **Mandelbrot set** in C. It includes a program for creating a single JPEG image and a second program that creates a sequence of progressively zoomed images using **processes (`fork`)** and **POSIX threads (`pthread`)**.
+**Assignments:** Lab 11 - Multiprocessing; Lab 12 - Multithreading  
+**Course:** CPE-2600 Systems Programming, Fall 2026  
+**Student:** [Your full name]  
+**Section:** [Your section number]
 
-The movie generator can also be used to compare execution times for different combinations of processes and threads.
+## Project overview
 
-## Project Files
+This C project generates images of the Mandelbrot set and uses the results to examine the performance of multiprocessing and multithreading. It includes two executables:
 
-| File | Description |
+- **`mandel`** generates a single JPEG image of the Mandelbrot set.
+- **`mandelmovie`** creates a sequence of progressively zoomed JPEG frames. It uses `fork()` to process different frames concurrently and POSIX threads (`pthread`) to divide the computation of each frame into separate image regions.
+
+The generated frames can be combined into a zoom movie with FFmpeg. The project also benchmarks the effects of different process and thread counts on total execution time.
+
+## Source files
+
+| File | Purpose |
 | --- | --- |
-| `mandel.c` | Calculates the Mandelbrot set, converts iteration counts to grayscale pixel values, and provides the single-image program. |
-| `mandel.h` | Declares the image computation functions, including row-based computation. |
-| `mandelmovie.c` | Creates a zoom sequence using child processes and multiple threads per image. |
-| `jpegrw.c` | Creates and manages image buffers and reads/writes JPEG files using libjpeg. |
-| `jpegrw.h` | Defines the `imgRawImage` structure and JPEG/image helper functions. |
-| `README.md` | Project documentation. |
+| `mandel.c` | Computes Mandelbrot iterations, converts iteration counts to grayscale colors, and implements the single-image command-line program. |
+| `mandel.h` | Declares the image-computation functions, including `compute_image_rows()`. |
+| `mandelmovie.c` | Generates zoom frames with child processes and multiple threads per image. |
+| `jpegrw.c` | Allocates and manages image buffers and reads/writes JPEG files with libjpeg. |
+| `jpegrw.h` | Declares the image structure and image/JPEG helper functions. |
+| `makefile` | Builds the `mandel` and `mandelmovie` executables. |
+| `mandel.mp4` | Example rendered Mandelbrot zoom movie. |
 
-## Requirements
+## Requirements and compilation
 
-- A Unix-like environment supporting `fork()`, `wait()`, and POSIX threads (for example, Linux)
-- GCC or a compatible C compiler
-- **libjpeg** headers and library
-- The POSIX threads and math libraries (linked by the commands below)
-- Optional: **FFmpeg** and **ffplay** for creating or viewing a video
+The program targets Linux or a compatible Unix-like environment with GCC, POSIX processes/threads, and libjpeg.
 
-On Ubuntu/Debian, the compiler and JPEG dependency can be installed with:
+On Ubuntu or Debian, install the prerequisites:
 
 ```bash
-sudo apt install build-essential libjpeg-dev
+sudo apt update
+sudo apt install build-essential libjpeg-dev ffmpeg
 ```
 
-To use the video commands below, also install FFmpeg:
+Build both programs from the repository directory:
 
 ```bash
-sudo apt install ffmpeg
+make
 ```
 
-## Compilation
+The included Makefile provides `mandel` and `mandelmovie` targets. To remove compiled output:
 
-From the directory containing the `.c` and `.h` files, run:
+```bash
+make clean
+```
 
-### Single-image program
+The programs can also be compiled manually:
 
 ```bash
 gcc -Wall -O2 -o mandel mandel.c jpegrw.c -ljpeg
+gcc -Wall -O2 -DMANDEL_LIBRARY -pthread -o mandelmovie mandelmovie.c mandel.c jpegrw.c -ljpeg -lm
 ```
 
-### Zoom movie program
+The `-DMANDEL_LIBRARY` definition excludes the `main()` in `mandel.c` when its image-calculation functions are linked into `mandelmovie`. The `-pthread` compiler/linker flag is recommended for the threaded target.
 
-```bash
-gcc -Wall -O2 -DMANDEL_LIBRARY -o mandelmovie mandelmovie.c mandel.c jpegrw.c -pthread -lm -ljpeg
+## Lab 11: Multiprocessing
+
+### Implementation
+
+The movie generator uses `fork()` to create child processes. Each child is assigned one frame, calculates its image, writes a JPEG file, frees its image buffer, and exits. The parent limits the number of concurrently active children to the value supplied with `-P`. It uses `wait()` to free a process slot and waits for all remaining children before terminating.
+
+The default movie has **50 frames**. Every new frame reduces the scale around a fixed center point, creating a zoom effect:
+
+```text
+scale_for_frame_i = initial_scale / (1.10 ^ i)
 ```
 
-**Important:** The `-DMANDEL_LIBRARY` flag excludes the `main()` function in `mandel.c` when compiling `mandelmovie`, preventing two `main()` definitions from conflicting.
+This work can be divided among processes because each frame is calculated independently.
 
-If your repository already has a Makefile that correctly builds both targets, you can use that instead.
+### Process-count benchmark
 
-## Generating a Single Image
+For the Lab 11 process-only comparison, runtime was measured while varying the number of child processes. The process-versus-runtime plot is shown below:
 
-Run with the default settings:
+![Number of Processes vs Execution Time](Screenshot%202026-11-17%20211230.png)
+
+The graph shows a sharp improvement when moving from one to several processes. The benefit becomes smaller as the number of processes increases, and the highest process count does not necessarily produce the fastest execution. For the comparable single-thread configurations in the complete benchmark table below, runtime decreased from **26.067 s** at 1 process to **3.473 s** at 20 processes, then increased to **4.371 s** at 50 processes.
+
+## Lab 12: Multithreading
+
+### Implementation
+
+Lab 12 adds the `-T` option to control the number of POSIX threads used to calculate **each frame**, while preserving the Lab 11 multiprocessing capability.
+
+1. A child process allocates an image buffer and determines the frame's zoomed coordinate boundaries.
+2. `createThreads()` allocates arrays of thread IDs and `thread_data_t` structures.
+3. Each thread receives a different, non-overlapping range of image rows, along with the image pointer, coordinate bounds, and maximum iteration count.
+4. Threads call `compute_image_rows()` and independently calculate pixel colors for their assigned rows.
+5. The child calls `pthread_join()` for every created thread before saving the completed JPEG.
+6. The parent process waits until all child processes have finished.
+
+Each thread writes to a separate portion of the image buffer, so no mutex is needed for pixel calculation. The program supports the required range of **1 through 20 threads**; additional counts were also included in the benchmark.
+
+### Runtime results
+
+The table below shows the measured execution time **in seconds** for each process/thread combination. The process count varies by row and the thread count by column. **Lower is better.**
+
+| Processes / Threads | 1 | 2 | 5 | 10 | 20 | 50 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| **1** | 26.067 | 15.193 | 8.364 | 5.521 | 4.299 | 3.846 |
+| **2** | 12.825 | 8.154 | 5.305 | 3.616 | 3.417 | 3.428 |
+| **5** | 6.253 | 3.940 | 3.199 | 3.282 | 3.098 | 3.289 |
+| **10** | 3.599 | 3.158 | 2.997 | 3.181 | 3.148 | 3.212 |
+| **20** | 3.473 | 3.282 | 3.254 | **2.698** | 3.220 | 3.598 |
+| **50** | 4.371 | 3.211 | 3.653 | 3.525 | 3.576 | 3.213 |
+
+#### Runtime heatmap
+
+![Mandelbrot Runtime Heatmap](Screenshot%202026-11-17%20212816.png)
+
+### Discussion of results
+
+**Which improved runtime more: multiprocessing or multithreading?**
+
+Both techniques substantially reduced runtime compared with the 1-process, 1-thread baseline of **26.067 seconds**. In this benchmark, multiprocessing generally had the greater effect when each technique was varied on its own:
+
+- **Increasing only processes:** 20 processes with 1 thread took **3.473 s**, about **7.51 times faster** than the baseline.
+- **Increasing only threads:** 1 process with 20 threads took **4.299 s**, about **6.06 times faster** than the baseline.
+
+A likely explanation is that independently processing entire frames makes good use of multiple CPU cores, while increasing the thread count within an individual frame eventually incurs overhead for creating, scheduling, and joining threads. The precise balance also depends on available CPU cores, memory, and JPEG-writing overhead.
+
+**Was there a sweet spot?**
+
+Yes. The fastest observed combination was **20 processes and 10 threads per image**, at **2.698 seconds**. This is approximately **9.66 times faster** than the 26.067-second baseline, or about a **89.6% reduction in elapsed time**.
+
+Increasing concurrency past that point did not consistently help. For example, at 20 processes, changing from 10 to 50 threads increased runtime from **2.698 s** to **3.598 s**. Similarly, increasing from 20 to 50 processes with only one thread increased runtime from **3.473 s** to **4.371 s**. These observations suggest diminishing returns and possible CPU scheduling or resource-contention overhead.
+
+Timing results can vary with system load and hardware. The table reports the recorded measurements rather than repeated-run averages.
+
+## Running the programs
+
+### Generate one image
 
 ```bash
 ./mandel
 ```
 
-This creates `mandel.jpg` in the current directory.
-
-### Single-image options
-
-| Option | Description | Default |
-| --- | --- | --- |
-| `-x` | X-coordinate of the image center | `0` |
-| `-y` | Y-coordinate of the image center | `0` |
-| `-s` | Horizontal span of the region | `4` |
-| `-W` | Image width in pixels | `1000` |
-| `-H` | Image height in pixels | `1000` |
-| `-m` | Maximum iterations per point | `1000` |
-| `-o` | Output JPEG filename | `mandel.jpg` |
-| `-h` | Display usage/help text | — |
-
-Example: generate a custom image centered near a detailed boundary of the Mandelbrot set.
+This creates `mandel.jpg`. For a custom image:
 
 ```bash
 ./mandel -x -0.7435 -y 0.1314 -s 0.01 -W 1000 -H 1000 -m 1000 -o zoom.jpg
 ```
 
-## Generating a Mandelbrot Zoom Sequence
-
-Run the movie generator with its defaults:
-
-```bash
-./mandelmovie
-```
-
-The program creates **50 JPEG frames**, named `mandel_0000.jpg`, `mandel_0001.jpg`, and so on, in the current directory.
-
-Each frame zooms further into the same center point. For frame index `i`, the scale is computed as:
-
-```text
-current_scale = initial_scale / (1.10 ^ i)
-```
-
-### Movie generator options
-
-| Option | Description | Default |
+| Option | Meaning | Default |
 | --- | --- | --- |
-| `-i` | Total number of images/frames to generate | `50` |
-| `-P` | Maximum number of concurrently active child processes | `1` |
-| `-T` | Number of threads used per image | `1` |
+| `-x` | Center X coordinate | `0` |
+| `-y` | Center Y coordinate | `0` |
+| `-s` | Horizontal scale | `4` |
+| `-W` | Image width (pixels) | `1000` |
+| `-H` | Image height (pixels) | `1000` |
 | `-m` | Maximum iterations per point | `1000` |
-| `-x` | X-coordinate of zoom center | `-0.7435` |
-| `-y` | Y-coordinate of zoom center | `0.1314` |
-| `-s` | Initial scale | `0.01` |
-| `-W` | Image width in pixels | `1000` |
-| `-H` | Image height in pixels | `1000` |
+| `-o` | Output filename | `mandel.jpg` |
+| `-h` | Display help | — |
 
-**Note:** Process count uses an uppercase **`-P`**, while thread count uses an uppercase **`-T`**.
-
-Example: generate 50 frames using up to 5 concurrent processes, with 10 threads per image.
+### Generate a zoom sequence
 
 ```bash
 ./mandelmovie -i 50 -P 5 -T 10
 ```
 
-Example: generate 10 smaller frames for a quick test.
+This command generates 50 frames using up to 5 concurrently active processes and 10 threads per frame. Output files are named `mandel_0000.jpg`, `mandel_0001.jpg`, and so on.
+
+| Option | Meaning | Default |
+| --- | --- | --- |
+| `-i` | Number of frames | `50` |
+| `-P` | Maximum concurrent child processes | `1` |
+| `-T` | Threads per frame | `1` |
+| `-m` | Maximum iterations per point | `1000` |
+| `-x` | Zoom center X | `-0.7435` |
+| `-y` | Zoom center Y | `0.1314` |
+| `-s` | Initial scale | `0.01` |
+| `-W` | Image width (pixels) | `1000` |
+| `-H` | Image height (pixels) | `1000` |
+
+**Note:** `-P` and `-T` are uppercase. The process and thread counts must both be greater than zero.
+
+### Measure runtime
 
 ```bash
-./mandelmovie -i 10 -P 2 -T 5 -W 500 -H 500
+/usr/bin/time -p ./mandelmovie -i 50 -P 20 -T 10
 ```
 
-## How Parallel Processing Works
+The reported `real` value is the wall-clock execution time. For fair comparisons, keep the frame count, image dimensions, iteration limit, zoom center, and initial scale the same between runs.
 
-1. The parent process loops through the requested frame indices.
-2. For each frame, it uses `fork()` to start a child process. The parent uses `wait()` to limit the number of concurrently active children to the value of `-P`.
-3. Each child allocates its own image buffer and calculates the scale for its frame.
-4. The child creates `-T` POSIX threads. Each thread computes a distinct range of image rows through `compute_image_rows()`.
-5. After all its threads have joined, the child writes its JPEG file, releases its memory, and exits.
-6. The parent waits for remaining children before terminating.
+## Creating and watching the movie
 
-This approach combines **multiprocessing across frames** with **multithreading within each frame**. Pixel colors are grayscale values derived from the number of Mandelbrot iterations at each point.
-
-## Watching the Zoom as a Video
-
-The C program produces **individual JPEG images**, not a video file. FFmpeg can assemble the frames into a video:
+The program saves JPEG frames rather than a finished video. To assemble them into an MP4 at 10 frames per second:
 
 ```bash
-ffmpeg -framerate 10 -i mandel_%04d.jpg -c:v libx264 -pix_fmt yuv420p mandelbrot.mp4
+ffmpeg -framerate 10 -i mandel_%04d.jpg -c:v libx264 -pix_fmt yuv420p mandel.mp4
 ```
 
-This creates `mandelbrot.mp4` at 10 frames per second. The output frame rate can be changed by adjusting `-framerate`.
-
-To play the video:
+To play the generated video:
 
 ```bash
-ffplay mandelbrot.mp4
+ffplay mandel.mp4
 ```
 
-You can also preview the image sequence directly without first exporting an MP4:
+To preview frames directly:
 
 ```bash
 ffplay -framerate 10 -i mandel_%04d.jpg
 ```
 
+The repository also includes an example movie: [mandel.mp4](mandel.mp4).
 
-### Benchmark Data
+## Notes
 
-[Download Excel Benchmark Results](BenchmarkResults.xlsx)
+- Generated `mandel_*.jpg` frames may be recreated when the program runs again.
+- The number of processes determines concurrent frame calculations; it does **not** change the total number of frames requested with `-i`.
+- Multiprocessing and threading overhead mean that larger counts will not always improve runtime.
+- Generated JPEG frames and compiled object files normally belong in `.gitignore`. The final demonstration movie is included in this repository for grading, as required by Lab 11.
 
+## Code acknowledgements
 
+The starter code contains acknowledgements for external examples used as a foundation:
 
-
-## Performance Analysis
-
-### Execution Time Heatmap
-
-![Heatmap](Screenshot%202026-11-17%20212816.png)
-
-### Processes vs. Execution Time
-
-![Runtime Graph](Screenshot%202026-11-17%20211230.png)
-
-### Full Benchmark Data
-
-[Download Excel Workbook](BenchmarkResults.xlsx)
-
-
-## Performance Benchmarking
-
-The program accepts different process and thread counts, making it possible to compare execution times. For example:
-
-```bash
-time ./mandelmovie -i 50 -P 5 -T 10
-```
-
-For a controlled comparison, keep the image count, image dimensions, center, scale, and maximum iterations the same across test runs. Test combinations such as:
-
-```text
-Processes: 1, 2, 5, 10, 20, 50
-Threads:   1, 2, 5, 10, 20, 50
-```
-
-This produces **36 configurations**. Record the elapsed execution time for each configuration in a table or CSV file. A heatmap can highlight the fastest configuration, while a line chart can show execution time versus thread count with one line per process count.
-
-**Interpretation:** Lower elapsed time is better. Increasing process or thread counts may improve performance up to a point, but excessive concurrency can introduce scheduling, memory, and disk-I/O overhead. The elapsed time also includes JPEG generation and file writing, not jgust Mandelbrot calculations. For more reliable comparisons, run each configuration multiple times and report the average or median.
-
+- [FIU COP4610 Mandelbrot project example](https://users.cs.fiu.edu/~cpoellab/teaching/cop4610_fall22/project3.html)
+- [libjpeg example from tspi.at](https://www.tspi.at/2020/03/20/libjpegexample.html)
