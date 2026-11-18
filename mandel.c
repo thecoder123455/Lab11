@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include "jpegrw.h"
+#include "mandel.h"
 
 // local routines
 static int iteration_to_color( int i, int max );
@@ -126,22 +127,30 @@ Compute an entire Mandelbrot image, writing each point to the given bitmap.
 Scale the image to the range (xmin-xmax,ymin-ymax), limiting iterations to "max"
 */
 
-void compute_image(imgRawImage* img, double xmin, double xmax, double ymin, double ymax, int max )
+void compute_image(imgRawImage* img, double xmin, double xmax, double ymin, double ymax, int max)
 {
-	int i,j;
+	compute_image_rows(img, xmin, xmax, ymin, ymax, max, 0, img->height);
+}
 
-	int width = img->width;
-	int height = img->height;
+void compute_image_rows(imgRawImage* img, double xmin, double xmax, double ymin, double ymax, int max,unsigned int first_row, unsigned int end_row)
+{
+	unsigned int i, j;
+	unsigned int width = img->width;
 
-	// For every pixel in the image...
+	if (end_row > img->height) {
+		end_row = img->height;
+	}
+	if (first_row > end_row) {
+		return;
+	}
 
-	for(j=0;j<height;j++) {
+	for (j = first_row; j < end_row; j++) {
 
-		for(i=0;i<width;i++) {
+		for (i = 0; i < width; i++) {
 
 			// Determine the point in x,y space for that pixel.
 			double x = xmin + i*(xmax-xmin)/width;
-			double y = ymin + j*(ymax-ymin)/height;
+			double y = ymin + j*(ymax-ymin)/img->height;
 
 			// Compute the iterations at that point.
 			int iters = iterations_at_point(x,y,max);
